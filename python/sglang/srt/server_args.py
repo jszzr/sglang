@@ -26,6 +26,9 @@ import random
 import tempfile
 from typing import Any, Callable, Dict, List, Literal, Optional, Union
 
+from sglang.srt.args.cuda_graph_args import CudaGraphArgs
+from sglang.srt.args.model_args import ModelArgs
+from sglang.srt.args.parallel_args import ParallelArgs
 from sglang.srt.connector import ConnectorType
 from sglang.srt.environ import envs
 from sglang.srt.function_call.function_call_parser import FunctionCallParser
@@ -3250,111 +3253,7 @@ class ServerArgs:
     def add_cli_args(parser: argparse.ArgumentParser):
 
         # Model and tokenizer
-        parser.add_argument(
-            "--model-path",
-            "--model",
-            type=str,
-            help="The path of the model weights. This can be a local folder or a Hugging Face repo ID.",
-            required=True,
-        )
-        parser.add_argument(
-            "--tokenizer-path",
-            type=str,
-            default=ServerArgs.tokenizer_path,
-            help="The path of the tokenizer.",
-        )
-        parser.add_argument(
-            "--tokenizer-mode",
-            type=str,
-            default=ServerArgs.tokenizer_mode,
-            choices=["auto", "slow"],
-            help="Tokenizer mode. 'auto' will use the fast "
-            "tokenizer if available, and 'slow' will "
-            "always use the slow tokenizer.",
-        )
-        parser.add_argument(
-            "--tokenizer-worker-num",
-            type=int,
-            default=ServerArgs.tokenizer_worker_num,
-            help="The worker num of the tokenizer manager.",
-        )
-        parser.add_argument(
-            "--skip-tokenizer-init",
-            action="store_true",
-            help="If set, skip init tokenizer and pass input_ids in generate request.",
-        )
-        parser.add_argument(
-            "--load-format",
-            type=str,
-            default=ServerArgs.load_format,
-            choices=LOAD_FORMAT_CHOICES,
-            help="The format of the model weights to load. "
-            '"auto" will try to load the weights in the safetensors format '
-            "and fall back to the pytorch bin format if safetensors format "
-            "is not available. "
-            '"pt" will load the weights in the pytorch bin format. '
-            '"safetensors" will load the weights in the safetensors format. '
-            '"npcache" will load the weights in pytorch format and store '
-            "a numpy cache to speed up the loading. "
-            '"dummy" will initialize the weights with random values, '
-            "which is mainly for profiling."
-            '"gguf" will load the weights in the gguf format. '
-            '"bitsandbytes" will load the weights using bitsandbytes '
-            "quantization."
-            '"layered" loads weights layer by layer so that one can quantize a '
-            "layer before loading another to make the peak memory envelope "
-            "smaller.",
-        )
-        parser.add_argument(
-            "--model-loader-extra-config",
-            type=str,
-            help="Extra config for model loader. "
-            "This will be passed to the model loader corresponding to the chosen load_format.",
-            default=ServerArgs.model_loader_extra_config,
-        )
-        parser.add_argument(
-            "--trust-remote-code",
-            action="store_true",
-            help="Whether or not to allow for custom models defined on the Hub in their own modeling files.",
-        )
-        parser.add_argument(
-            "--context-length",
-            type=int,
-            default=ServerArgs.context_length,
-            help="The model's maximum context length. Defaults to None (will use the value from the model's config.json instead).",
-        )
-        parser.add_argument(
-            "--is-embedding",
-            action="store_true",
-            help="Whether to use a CausalLM as an embedding model.",
-        )
-        parser.add_argument(
-            "--enable-multimodal",
-            default=ServerArgs.enable_multimodal,
-            action="store_true",
-            help="Enable the multimodal functionality for the served model. If the model being served is not multimodal, nothing will happen",
-        )
-        parser.add_argument(
-            "--revision",
-            type=str,
-            default=None,
-            help="The specific model version to use. It can be a branch "
-            "name, a tag name, or a commit id. If unspecified, will use "
-            "the default version.",
-        )
-        parser.add_argument(
-            "--model-impl",
-            type=str,
-            default=ServerArgs.model_impl,
-            help="Which implementation of the model to use.\n\n"
-            '* "auto" will try to use the SGLang implementation if it exists '
-            "and fall back to the Transformers implementation if no SGLang "
-            "implementation is available.\n"
-            '* "sglang" will use the SGLang model implementation.\n'
-            '* "transformers" will use the Transformers model '
-            '* "mindspore" will use the MindSpore model '
-            "implementation.\n",
-        )
+        ModelArgs.add_cli_args(parser)
 
         # HTTP server
         parser.add_argument(
@@ -3391,12 +3290,6 @@ class ServerArgs:
             required=False,
             help="Specify custom warmup functions (csv) to run before server starts eg. --warmups=warmup_name1,warmup_name2 "
             "will run the functions `warmup_name1` and `warmup_name2` specified in warmup.py before the server starts listening for requests",
-        )
-        parser.add_argument(
-            "--nccl-port",
-            type=int,
-            default=ServerArgs.nccl_port,
-            help="The port for NCCL distributed environment setup. Defaults to a random port.",
         )
         parser.add_argument(
             "--checkpoint-engine-wait-weights-before-ready",
@@ -3696,53 +3589,10 @@ class ServerArgs:
             help="Custom buckets for prefill delayer wait seconds histogram. 0 will be auto-added.",
         )
 
+        # Parallelism, distributed, and device (delegated to ParallelArgs)
+        ParallelArgs.add_cli_args(parser)
+
         # Runtime options
-        parser.add_argument(
-            "--device",
-            type=str,
-            default=ServerArgs.device,
-            help="The device to use ('cuda', 'xpu', 'hpu', 'npu', 'cpu'). Defaults to auto-detection if not specified.",
-        )
-        parser.add_argument(
-            "--tensor-parallel-size",
-            "--tp-size",
-            type=int,
-            default=ServerArgs.tp_size,
-            help="The tensor parallelism size.",
-        )
-        parser.add_argument(
-            "--attention-context-parallel-size",
-            "--attn-cp-size",
-            type=int,
-            default=ServerArgs.attn_cp_size,
-            help="The attention context parallelism size.",
-        )
-        parser.add_argument(
-            "--moe-data-parallel-size",
-            "--moe-dp-size",
-            type=int,
-            default=ServerArgs.moe_dp_size,
-            help="The moe data parallelism size.",
-        )
-        parser.add_argument(
-            "--pipeline-parallel-size",
-            "--pp-size",
-            type=int,
-            default=ServerArgs.pp_size,
-            help="The pipeline parallelism size.",
-        )
-        parser.add_argument(
-            "--pp-max-micro-batch-size",
-            type=int,
-            default=ServerArgs.pp_max_micro_batch_size,
-            help="The maximum micro batch size in pipeline parallelism.",
-        )
-        parser.add_argument(
-            "--pp-async-batch-depth",
-            type=int,
-            default=ServerArgs.pp_async_batch_depth,
-            help="The async batch depth of pipeline parallelism.",
-        )
         parser.add_argument(
             "--stream-interval",
             type=int,
@@ -3788,38 +3638,6 @@ class ServerArgs:
             type=float,
             default=ServerArgs.soft_watchdog_timeout,
             help="Set soft watchdog timeout in seconds. If a forward batch takes longer than this, the server will dump information for debugging.",
-        )
-        parser.add_argument(
-            "--dist-timeout",
-            type=int,
-            default=ServerArgs.dist_timeout,
-            help="Set timeout for torch.distributed initialization.",
-        )
-        parser.add_argument(
-            "--download-dir",
-            type=str,
-            default=ServerArgs.download_dir,
-            help="Model download directory for huggingface.",
-        )
-        parser.add_argument(
-            "--model-checksum",
-            type=str,
-            nargs="?",
-            const="",
-            default=None,
-            help="Model file integrity verification. If provided without value, uses model-path as HF repo ID. Otherwise, provide checksums JSON file path or HuggingFace repo ID.",
-        )
-        parser.add_argument(
-            "--base-gpu-id",
-            type=int,
-            default=ServerArgs.base_gpu_id,
-            help="The base GPU ID to start allocating GPUs from. Useful when running multiple instances on the same machine.",
-        )
-        parser.add_argument(
-            "--gpu-id-step",
-            type=int,
-            default=ServerArgs.gpu_id_step,
-            help="The delta between consecutive GPU IDs that are used. For example, setting it to 2 will use GPU 0,2,4,...",
         )
         parser.add_argument(
             "--sleep-on-idle",
@@ -4116,14 +3934,7 @@ class ServerArgs:
             "sampling parameters if available. Default is 'model'.",
         )
 
-        # Data parallelism
-        parser.add_argument(
-            "--data-parallel-size",
-            "--dp-size",
-            type=int,
-            default=ServerArgs.dp_size,
-            help="The data parallelism size.",
-        )
+        # Data parallelism (dp_size, ep_size, etc. are in ParallelArgs above)
         parser.add_argument(
             "--load-balance-method",
             type=str,
@@ -4141,20 +3952,6 @@ class ServerArgs:
             "--prefill-round-robin-balance",
             action=DeprecatedAction,
             help="Note: --prefill-round-robin-balance is deprecated now.",
-        )
-
-        # Multi-node distributed serving
-        parser.add_argument(
-            "--dist-init-addr",
-            "--nccl-init-addr",  # For backward compatibility. This will be removed in the future.
-            type=str,
-            help="The host address for initializing distributed backend (e.g., `192.168.0.2:25000`).",
-        )
-        parser.add_argument(
-            "--nnodes", type=int, default=ServerArgs.nnodes, help="The number of nodes."
-        )
-        parser.add_argument(
-            "--node-rank", type=int, default=ServerArgs.node_rank, help="The node rank."
         )
 
         # Model override args
@@ -4498,15 +4295,7 @@ class ServerArgs:
             help="Enable multi-layer Eagle speculative decoding.",
         )
 
-        # Expert parallelism
-        parser.add_argument(
-            "--expert-parallel-size",
-            "--ep-size",
-            "--ep",
-            type=int,
-            default=ServerArgs.ep_size,
-            help="The expert parallelism size.",
-        )
+        # Expert parallelism (ep_size is in ParallelArgs above)
         parser.add_argument(
             "--moe-a2a-backend",
             type=str,
@@ -4935,38 +4724,10 @@ class ServerArgs:
             action="store_true",
             help="Disable RadixAttention for prefix caching.",
         )
-        parser.add_argument(
-            "--cuda-graph-max-bs",
-            type=int,
-            default=ServerArgs.cuda_graph_max_bs,
-            help="Set the maximum batch size for cuda graph. It will extend the cuda graph capture batch size to this value.",
-        )
-        parser.add_argument(
-            "--cuda-graph-bs",
-            type=int,
-            nargs="+",
-            help="Set the list of batch sizes for cuda graph.",
-        )
-        parser.add_argument(
-            "--disable-cuda-graph",
-            action="store_true",
-            help="Disable cuda graph.",
-        )
-        parser.add_argument(
-            "--disable-cuda-graph-padding",
-            action="store_true",
-            help="Disable cuda graph when padding is needed. Still uses cuda graph when padding is not needed.",
-        )
-        parser.add_argument(
-            "--enable-profile-cuda-graph",
-            action="store_true",
-            help="Enable profiling of cuda graph capture.",
-        )
-        parser.add_argument(
-            "--enable-cudagraph-gc",
-            action="store_true",
-            help="Enable garbage collection during CUDA graph capture. If disabled (default), GC is frozen during capture to speed up the process.",
-        )
+
+        # CUDA graph and torch.compile (delegated to CudaGraphArgs)
+        CudaGraphArgs.add_cli_args(parser)
+
         parser.add_argument(
             "--enable-layerwise-nvtx-marker",
             action="store_true",
@@ -5052,62 +4813,6 @@ class ServerArgs:
             type=float,
             default=ServerArgs.tbo_token_distribution_threshold,
             help="The threshold of token distribution between two batches in micro-batch-overlap, determines whether to two-batch-overlap or two-chunk-overlap. Set to 0 denote disable two-chunk-overlap.",
-        )
-        parser.add_argument(
-            "--enable-torch-compile",
-            action="store_true",
-            help="Optimize the model with torch.compile. Experimental feature.",
-        )
-        parser.add_argument(
-            "--enable-torch-compile-debug-mode",
-            action="store_true",
-            help="Enable debug mode for torch compile",
-        )
-        parser.add_argument(
-            "--disable-piecewise-cuda-graph",
-            action="store_true",
-            help="Disable piecewise cuda graph for extend/prefill.",
-        )
-        parser.add_argument(
-            "--enable-piecewise-cuda-graph",
-            action=DeprecatedAction,
-            help="Deprecated: Piecewise cuda graph is enabled by default. Use --enforce-piecewise-cuda-graph to skip auto-disable conditions.",
-        )
-        parser.add_argument(
-            "--enforce-piecewise-cuda-graph",
-            action="store_true",
-            help="Enforce piecewise cuda graph, skipping all auto-disable conditions. Used for testing.",
-        )
-        parser.add_argument(
-            "--piecewise-cuda-graph-tokens",
-            type=int,
-            nargs="+",
-            help="Set the list of token lengths for piecewise cuda graph capture.",
-        )
-        parser.add_argument(
-            "--piecewise-cuda-graph-compiler",
-            type=str,
-            default=ServerArgs.piecewise_cuda_graph_compiler,
-            help="Set the compiler for piecewise cuda graph. Choices are: eager, inductor.",
-            choices=["eager", "inductor"],
-        )
-        parser.add_argument(
-            "--torch-compile-max-bs",
-            type=int,
-            default=ServerArgs.torch_compile_max_bs,
-            help="Set the maximum batch size when using torch compile.",
-        )
-        parser.add_argument(
-            "--piecewise-cuda-graph-max-tokens",
-            type=int,
-            default=ServerArgs.piecewise_cuda_graph_max_tokens,
-            help="Set the maximum tokens when using piecewise cuda graph.",
-        )
-        parser.add_argument(
-            "--torchao-config",
-            type=str,
-            default=ServerArgs.torchao_config,
-            help="Optimize the model with torchao. Experimental feature. Current choices are: int8dq, int8wo, int4wo-<group_size>, fp8wo, fp8dq-per_tensor, fp8dq-per_row",
         )
         parser.add_argument(
             "--enable-nan-detection",
@@ -6055,6 +5760,72 @@ class ServerArgs:
             return True
         else:
             return False
+
+    # ── Domain-specific argument group properties ──────────────────────
+    # These properties construct sub-dataclass views from the flat fields.
+    # ServerArgs stays flat for CLI / serialization backward compatibility;
+    # new code can pass grouped objects instead of unpacking many fields.
+
+    @property
+    def model_args(self) -> ModelArgs:
+        return ModelArgs(
+            model_path=self.model_path,
+            tokenizer_path=self.tokenizer_path,
+            tokenizer_mode=self.tokenizer_mode,
+            tokenizer_worker_num=self.tokenizer_worker_num,
+            skip_tokenizer_init=self.skip_tokenizer_init,
+            load_format=self.load_format,
+            model_loader_extra_config=self.model_loader_extra_config,
+            trust_remote_code=self.trust_remote_code,
+            context_length=self.context_length,
+            is_embedding=self.is_embedding,
+            enable_multimodal=self.enable_multimodal,
+            revision=self.revision,
+            model_impl=self.model_impl,
+            download_dir=self.download_dir,
+            model_checksum=self.model_checksum,
+        )
+
+    @property
+    def parallel_args(self) -> ParallelArgs:
+        return ParallelArgs(
+            device=self.device,
+            tp_size=self.tp_size,
+            pp_size=self.pp_size,
+            pp_max_micro_batch_size=self.pp_max_micro_batch_size,
+            pp_async_batch_depth=self.pp_async_batch_depth,
+            dp_size=self.dp_size,
+            ep_size=self.ep_size,
+            attn_cp_size=self.attn_cp_size,
+            moe_dp_size=self.moe_dp_size,
+            nnodes=self.nnodes,
+            node_rank=self.node_rank,
+            dist_init_addr=self.dist_init_addr,
+            base_gpu_id=self.base_gpu_id,
+            gpu_id_step=self.gpu_id_step,
+            nccl_port=self.nccl_port,
+            dist_timeout=self.dist_timeout,
+        )
+
+    @property
+    def cuda_graph_args(self) -> CudaGraphArgs:
+        return CudaGraphArgs(
+            cuda_graph_max_bs=self.cuda_graph_max_bs,
+            cuda_graph_bs=self.cuda_graph_bs,
+            disable_cuda_graph=self.disable_cuda_graph,
+            disable_cuda_graph_padding=self.disable_cuda_graph_padding,
+            enable_profile_cuda_graph=self.enable_profile_cuda_graph,
+            enable_cudagraph_gc=self.enable_cudagraph_gc,
+            disable_piecewise_cuda_graph=self.disable_piecewise_cuda_graph,
+            enforce_piecewise_cuda_graph=self.enforce_piecewise_cuda_graph,
+            piecewise_cuda_graph_max_tokens=self.piecewise_cuda_graph_max_tokens,
+            piecewise_cuda_graph_tokens=self.piecewise_cuda_graph_tokens,
+            piecewise_cuda_graph_compiler=self.piecewise_cuda_graph_compiler,
+            enable_torch_compile=self.enable_torch_compile,
+            enable_torch_compile_debug_mode=self.enable_torch_compile_debug_mode,
+            torch_compile_max_bs=self.torch_compile_max_bs,
+            torchao_config=self.torchao_config,
+        )
 
 
 # NOTE: This is a global variable to hold the server args for scheduler.
