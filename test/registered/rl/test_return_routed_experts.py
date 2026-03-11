@@ -98,9 +98,7 @@ class TestReturnRoutedExperts(CustomTestCase):
         cls.sampling_args = {
             "temperature": 0,
         }
-        cls.max_concurrency = (
-            AMD_CI_MAX_REQUEST_CONCURRENCY if is_in_amd_ci() else 100
-        )
+        cls.max_concurrency = AMD_CI_MAX_REQUEST_CONCURRENCY if is_in_amd_ci() else 100
         cls.max_new_tokens = AMD_CI_MAX_NEW_TOKENS if is_in_amd_ci() else 100
         # prepare ShareGPT dataset
         try:
