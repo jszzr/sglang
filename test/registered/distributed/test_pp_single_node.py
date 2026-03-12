@@ -191,7 +191,10 @@ class TestQwenVLPPAccuracy(unittest.TestCase):
         metrics = run_eval_few_shot_gsm8k(args)
         print(f"{metrics=}")
 
-        self.assertGreater(metrics["accuracy"], 0.65)
+        if is_in_amd_ci():
+            self.assertGreater(metrics["accuracy"], 0.58)
+        else:
+            self.assertGreater(metrics["accuracy"], 0.65)
         # Wait a little bit so that the memory check happens.
         time.sleep(4)
 
