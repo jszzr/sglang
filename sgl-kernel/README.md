@@ -1,4 +1,4 @@
-# sglang-kernel
+# sglang-kernel (prior sgl-kernel)
 
 [Kernel Library](https://github.com/sgl-project/sglang/tree/main/sgl-kernel) for LLM inference engines
 
