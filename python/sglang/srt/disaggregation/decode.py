@@ -550,7 +550,6 @@ class DecodePreallocQueue:
                     remaining.extend(reqs)
                 continue
 
-            # Success, reset retry count for this addr
             if bootstrap_addr in self._bootstrap_addr_retry_count:
                 del self._bootstrap_addr_retry_count[bootstrap_addr]
 
