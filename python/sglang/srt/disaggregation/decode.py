@@ -273,6 +273,7 @@ class DecodePreallocQueue:
         self._resolved_queue_lock = threading.Lock()
         self._resolved_queue: List[DecodeRequest] = []
         self._resolve_thread: Optional[threading.Thread] = None
+        self._bootstrap_addr_retry_count: Dict[str, int] = {}
 
         if self.scheduler.tp_worker.is_hybrid_swa:
             # FIXME: current SWA allocation allocate full kv cache size in prefill
@@ -521,18 +522,33 @@ class DecodePreallocQueue:
             # which is a conflict with the lazy resolve logic in CommonKVReceiver,
             # so we need to ensure the parallel info before resolving it.
             if not self.kv_manager.ensure_parallel_info(bootstrap_addr):
-                error_message = f"Could not fetch prefill parallel info from bootstrap server {bootstrap_addr}"
-                logger.error(error_message)
-                for req in reqs:
-                    prepare_abort(
-                        req,
-                        error_message,
-                        status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-                    )
-                    if self.scheduler.enable_metrics:
-                        self.scheduler.metrics_collector.increment_bootstrap_failed_reqs()
-                    self.scheduler.stream_output([req], req.return_logprob)
+                # Increment retry count for this bootstrap_addr
+                retry_count = (
+                    self._bootstrap_addr_retry_count.get(bootstrap_addr, 0) + 1
+                )
+                self._bootstrap_addr_retry_count[bootstrap_addr] = retry_count
+
+                if retry_count >= 20:
+                    # Max retries reached, fail the requests
+                    error_message = f"Could not fetch prefill parallel info from bootstrap server {bootstrap_addr} after {retry_count} retries"
+                    logger.error(error_message)
+                    for req in reqs:
+                        prepare_abort(
+                            req,
+                            error_message,
+                            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                        )
+                        if self.scheduler.enable_metrics:
+                            self.scheduler.metrics_collector.increment_bootstrap_failed_reqs()
+                        self.scheduler.stream_output([req], req.return_logprob)
+                    del self._bootstrap_addr_retry_count[bootstrap_addr]
+                else:
+                    remaining.extend(reqs)
                 continue
+
+            # Success, reset retry count for this addr
+            if bootstrap_addr in self._bootstrap_addr_retry_count:
+                del self._bootstrap_addr_retry_count[bootstrap_addr]
 
             need_query = []
             for req in reqs:
