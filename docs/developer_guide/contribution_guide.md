@@ -125,7 +125,7 @@ Users listed in [CI_PERMISSIONS.json](https://github.com/sgl-project/sglang/blob
   - If you write multiple if/else blocks for new features, ensure the common path (e.g., NVIDIA hardware or the existing code path) is the first branch.
 
 ## How to update sgl-kernel
-Since sglang and the `sglang-kernel` distribution are separate Python packages, our current GitHub CI infrastructure does not support updating a kernel and using it immediately within the same pull request (PR).
+Since sglang and the `sglang-kernel` (prior `sgl-kernel`) distribution are separate Python packages, our current GitHub CI infrastructure does not support updating a kernel and using it immediately within the same pull request (PR).
 To add a new kernel or modify an existing one in the `sgl-kernel/` source tree, you must use multiple PRs.
 
 Follow these steps:
