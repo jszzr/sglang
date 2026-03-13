@@ -55,7 +55,6 @@ class TestDisaggregationDecodeOffload(PDDisaggregationServerBase):
     @classmethod
     def tearDownClass(cls):
         # Restore the original environment variable state
-        super().tearDownClass()
         if cls.old_stride is not None:
             os.environ["SGLANG_HICACHE_DECODE_OFFLOAD_STRIDE"] = cls.old_stride
         else:
@@ -66,6 +65,7 @@ class TestDisaggregationDecodeOffload(PDDisaggregationServerBase):
         # Clean up the cache directory
         if os.path.exists(cls.hicache_dir):
             shutil.rmtree(cls.hicache_dir)
+        super().tearDownClass()
 
     @classmethod
     def start_prefill(cls):
