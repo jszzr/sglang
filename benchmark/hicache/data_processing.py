@@ -47,7 +47,9 @@ def _parse_loogle_qa_pairs(raw_qa_pairs: Union[str, List[dict]]) -> List[dict]:
             except (ValueError, SyntaxError) as err:
                 raise ValueError("Invalid qa_pairs format in Loogle dataset") from err
     else:
-        raise ValueError("qa_pairs should be either a list or a JSON/Python string list")
+        raise ValueError(
+            "qa_pairs should be either a list or a JSON/Python string list"
+        )
 
     if not isinstance(qa_pairs, list):
         raise ValueError("qa_pairs should decode to a list")
@@ -74,7 +76,9 @@ def _load_generated_prefix_cache(cache_path) -> SampleOutput:
         normalized_group = []
         for row in group:
             if not isinstance(row, list) or len(row) != 3:
-                raise ValueError("Each cache row must be [prompt, prompt_len, output_len]")
+                raise ValueError(
+                    "Each cache row must be [prompt, prompt_len, output_len]"
+                )
             prompt, prompt_len, output_len = row
             if not isinstance(prompt, str):
                 raise ValueError("Prompt in cache row must be a string")
