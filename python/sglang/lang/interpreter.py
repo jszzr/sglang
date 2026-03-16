@@ -797,6 +797,7 @@ class StreamExecutor:
             "top_p",
             "top_k",
             "min_p",
+            "sampling_seed",
             "frequency_penalty",
             "presence_penalty",
             "ignore_eos",
