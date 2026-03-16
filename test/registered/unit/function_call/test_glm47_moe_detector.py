@@ -1379,6 +1379,51 @@ class TestGlm4ComplexJsonSchema(unittest.TestCase):
         self.assertEqual(params["query"], "test query")
         self.assertEqual(params["priority"], "high")
 
+    def test_preserve_significant_whitespace_in_string_arguments(self):
+        """Ensure GLM4/GLM47 preserve leading and trailing spaces for string args."""
+        tools = [
+            Tool(
+                type="function",
+                function=Function(
+                    name="apply_diff",
+                    parameters={
+                        "type": "object",
+                        "properties": {
+                            "old_string": {"type": "string"},
+                            "new_string": {"type": "string"},
+                        },
+                        "required": ["old_string", "new_string"],
+                    },
+                ),
+            )
+        ]
+
+        glm4_text = (
+            "<tool_call>apply_diff\n"
+            "<arg_key>old_string</arg_key>\n"
+            "<arg_value>    def foo():    </arg_value>\n"
+            "<arg_key>new_string</arg_key>\n"
+            "<arg_value>  def bar():</arg_value>\n"
+            "</tool_call>"
+        )
+        glm4_result = self.glm4_detector.detect_and_parse(glm4_text, tools)
+        self.assertEqual(len(glm4_result.calls), 1)
+        glm4_params = json.loads(glm4_result.calls[0].parameters)
+        self.assertEqual(glm4_params["old_string"], "    def foo():    ")
+        self.assertEqual(glm4_params["new_string"], "  def bar():")
+
+        glm47_text = (
+            "<tool_call>apply_diff"
+            "<arg_key>old_string</arg_key><arg_value>    def foo():    </arg_value>"
+            "<arg_key>new_string</arg_key><arg_value>  def bar():</arg_value>"
+            "</tool_call>"
+        )
+        glm47_result = self.glm47_detector.detect_and_parse(glm47_text, tools)
+        self.assertEqual(len(glm47_result.calls), 1)
+        glm47_params = json.loads(glm47_result.calls[0].parameters)
+        self.assertEqual(glm47_params["old_string"], "    def foo():    ")
+        self.assertEqual(glm47_params["new_string"], "  def bar():")
+
     def test_glm4_detector_streaming_with_complex_schema(self):
         """Test GLM4 detector streaming with complex schema."""
         chunks = [
